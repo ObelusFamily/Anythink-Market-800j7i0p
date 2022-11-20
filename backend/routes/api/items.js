@@ -8,13 +8,13 @@ const { sendEvent } = require("../../lib/event");
 
 // Preload item objects on routes with ':item'
 router.param("item", function(req, res, next, slug) {
+  console.log("Items end point called") 
   Item.findOne({ slug: slug })
     .populate("seller")
     .then(function(item) {
       if (!item) {
         return res.sendStatus(404);
       }
-
       req.item = item;
 
       return next();
@@ -40,9 +40,15 @@ router.get("/", auth.optional, function(req, res, next) {
   var query = {};
   var limit = 100;
   var offset = 0;
-
+  var title = "";
+  
   if (typeof req.query.limit !== "undefined") {
     limit = req.query.limit;
+  }
+  
+  if (typeof req.query.limit !== "undefined") {
+    title = req.query.title;
+    query.title = req.query.title;`ˀ`
   }
 
   if (typeof req.query.offset !== "undefined") {
@@ -53,30 +59,34 @@ router.get("/", auth.optional, function(req, res, next) {
     query.tagList = { $in: [req.query.tag] };
   }
 
+  
   Promise.all([
     req.query.seller ? User.findOne({ username: req.query.seller }) : null,
     req.query.favorited ? User.findOne({ username: req.query.favorited }) : null
   ])
-    .then(function(results) {
-      var seller = results[0];
-      var favoriter = results[1];
+  .then(function(results) {
+    var seller = results[0];
+    var favoriter = results[1];
+    
+    if (seller) {
+      query.seller = seller._id;
+    }
+    
+    if (favoriter) {
+      query._id = { $in: favoriter.favorites };
+    } else if (req.query.favorited) {
+      query._id = { $in: [] };
+    }
+    
 
-      if (seller) {
-        query.seller = seller._id;
-      }
+    console.log(query);
 
-      if (favoriter) {
-        query._id = { $in: favoriter.favorites };
-      } else if (req.query.favorited) {
-        query._id = { $in: [] };
-      }
-
-      return Promise.all([
+    return Promise.all([
         Item.find(query)
-          .limit(Number(limit))
-          .skip(Number(offset))
-          .sort({ createdAt: "desc" })
-          .exec(),
+        .limit(Number(limit))
+        .skip(Number(offset))
+        .sort({ createdAt: "desc" })
+        .exec(),
         Item.count(query).exec(),
         req.payload ? User.findById(req.payload.id) : null
       ]).then(async function(results) {
